@@ -4,6 +4,7 @@
 #include <getopt.h> 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 /*
 n=2
@@ -104,11 +105,11 @@ int main(int argc, char *argv[])
       case 'm' : m = atoi(optarg);	break;
       case 'p' : p = atoi(optarg); 	break;
       case 'a' : file_name = optarg; 	               
-                 fill_array(a,file_name,n ,m);
+                 fill_array(a, file_name, n, m);
                  break;
 
       case 'b' : file_name= optarg; 	               
-                 fill_array(b,file_name,m, p);
+                 fill_array(b, file_name, m, p);
                  break;
 
       default  : printf("use the following parameters -n : -m : -p : -a a.txt -b b.txt\n");
@@ -133,27 +134,35 @@ int main(int argc, char *argv[])
 
 int fill_array(float arr[], char *file_name, int x, int y)
 {
+
   FILE* myfile;
   myfile = fopen(file_name, "r");
   int index=0;
-  char character;
-  float my_arr;
+
+  char *character={0};
+  char *token=NULL;
+
+  posix_memalign((void **)&character, 256, 128 * sizeof(float));
 
   if (myfile != NULL)
   {
-    while (index<(x*y))
-    {
-      character = fgetc(myfile);	
-      if (character!=',')
-      { 
-        fscanf(myfile, "%f", &arr[index]);
- 	index++;
-      }
-    }
+    while (fgets(character, 1000, myfile)!= NULL){}
+//      printf("%s \n", character);
+
+    token = strtok(character, ", ");
+
+   while( token != NULL ) 
+   {
+//      printf( "%s ", token);
+      arr[index]=atof(token);
+//      printf("%5.3f ", arr[index]);
+      index++;
+      token = strtok(NULL, ", ");      
+   }
+//      printf("\n\n");
   }
 
   fclose(myfile);
-
   return (0);
 }
 
@@ -291,7 +300,7 @@ int sse()
 
         _mm_store_ps(output, vc1);
 
-        c[next]=c[next]+output[0];//+output[3];
+        c[next]=c[next]+output[0];
 
         next++;
       }
