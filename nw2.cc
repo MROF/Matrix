@@ -69,7 +69,7 @@ int main(int argc, char * argv[] )
 		
       ly[i][j]= e+ MAX( mm[i][j-1]+d, ly[i][j-1]);    //check the previous column   
   
-      mm[i][j]= score + MAX( mm[i-1][j-1], MAX ( lx[i][j], ly[i][j] ));
+      mm[i][j]= MAX( mm[i-1][j-1] + score, MAX ( lx[i][j], ly[i][j] ));
     }
 //---------------------printing the matricies---------------------
 
