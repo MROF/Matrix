@@ -39,29 +39,22 @@ int main(int argc, char * argv[] )
   int lx[alen][blen];
   int ly[alen][blen];
 
-//------------------Initializing The Matricies-------------------
+//--------------Initializing And Filling The Matricies------------
 
   mm[0][0]=0;
 
-  for(i=1;i<alen;i++) 
-  { 
+  for(i=1;i<alen;i++)
+  {
     mm[i][0] = d+(i*e);
     ly[i][0] = inf;
     lx[i][0] = d+(i*e);
-  }
-		
-  for(j=1;j<blen;j++)
-  {
-    mm[0][j] = d+(j*e);
-    lx[0][j]= inf;
-    ly[0][j]= d+(j*e);
-  }
-    
-//---------------------Filling The Matricies----------------------
 
-  for(i=1;i<alen;i++)
     for(j=1;j<blen;j++)
     {
+      mm[0][j] = d+(j*e);
+      lx[0][j]= inf;
+      ly[0][j]= d+(j*e);
+
       if (a[i-1]==b[j-1]) score=match;  
       else score=mismatch;
 
@@ -71,6 +64,7 @@ int main(int argc, char * argv[] )
   
       mm[i][j]= MAX( mm[i-1][j-1] + score, MAX ( lx[i][j], ly[i][j] ));
     }
+  }
 //---------------------printing the matricies---------------------
 
   printf("__________________________________\n");
