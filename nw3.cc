@@ -43,13 +43,11 @@ int main(int argc, char * argv[] )
 
   for(i=1;i<alen;i++)
   {
-    mm[i][0] = d+(i*e);
-    lxy[i][0] = d+(i*e);
+    mm[i][0] = lxy[i][0] = d+(i*e);
 
     for(j=1;j<blen;j++)
     {
-      mm[0][j] = d+(j*e);
-      lxy[0][j]= d+(j*e);
+      mm[0][j] = lxy[0][j] = d+(j*e);
 
       if (a[i-1]==b[j-1]) score=match;  
       else score=mismatch;
