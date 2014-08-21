@@ -1,7 +1,0 @@
-git add final123.cc
-
-git status
-
-git commit -m 'first version'
-
-git push -u origin master
