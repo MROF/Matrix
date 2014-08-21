@@ -1,3 +1,6 @@
+//  make
+//  ./matrix-avx -n 3 -m 2 -p 3 -a a.3x2.txt -b b.2x3.txt
+
 #include <x86intrin.h>
 #if (defined(__SSE) || defined(__AVX))
 #include <emmintrin.h>
@@ -62,7 +65,7 @@ int main(int argc, char *argv[])
   if (argc == 1)
    {
      fprintf(stderr, " syntax: %s arguments\n", argv[0]);
-     fprintf(stderr, "    Arguments:\n");
+     fprintf(stderr, " use the following parameters -n : -m : -p : -a a.txt -b b.txt\n");
      return (0);
    }
 
