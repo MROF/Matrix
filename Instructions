@@ -1,0 +1,9 @@
+git add file_name/file_name.cc
+git status
+git commit -m 'Note'
+git push -u origin master
+
+
+git pull
+git rm 
+
