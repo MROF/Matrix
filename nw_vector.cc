@@ -17,6 +17,8 @@
 #define BYTE_ALIGNMENT 16
 #endif
 
+int inverse(float arr[],int x,int y); // function to reverse the array
+
 int main(int argc, char * argv[] )
 {
   printf("\n--------------------------------------\n");
@@ -34,8 +36,8 @@ int main(int argc, char * argv[] )
   int rr[padding];
   int score[padding];
   int i, j;
-  char c;
 
+  char c;
   #if (defined(__AVX))
    __m256 h, t1, x;
   #endif
@@ -44,7 +46,6 @@ int main(int argc, char * argv[] )
    {
      fprintf(stderr, " syntax: %s arguments\n", argv[0]);
      printf(" use the following parameters -a : -b : -m : -s : -g : -e :\n");
-
      return (0);
    }
 
@@ -86,8 +87,8 @@ int main(int argc, char * argv[] )
 
   float *hh;
   float *f;
-  posix_memalign ((void **)&hh, BYTE_ALIGNMENT,  n * mm * sizeof(float));
-  posix_memalign ((void **)&f, BYTE_ALIGNMENT,   n * mm * sizeof(float));
+  posix_memalign ((void **)&hh, BYTE_ALIGNMENT, n * mm * sizeof(float));
+  posix_memalign ((void **)&f, BYTE_ALIGNMENT,  n * mm * sizeof(float));
 
   for(i=0;i<n*mm;i++)
     hh[i]=f[i]=-99;
@@ -110,6 +111,10 @@ int main(int argc, char * argv[] )
   float *output;
 
   posix_memalign ((void **)&output, BYTE_ALIGNMENT, padding * sizeof(float));
+
+  inverse(hh,mm,n); // inverse the matrix to work with vector approach 
+
+//---------------------------- testing Read of the values -------------
 /*
   for (j=0; j<n;j++)
   {
@@ -120,20 +125,68 @@ int main(int argc, char * argv[] )
 
       printf(" Done ");
     }
-    printf("\n");
+    printf("\n\n");
   }
-*/
 
   for (j=0; j<n;j++)
   {
     for (i=0;i<y;i++)
     { 
-      h= _mm256_load_ps( &hh [(n*padding*i)+j] ); 
+      for(int k=0;k<padding;k++)
+        printf("%3d ",(n*padding*i)+j+(k*4) );
+
+      printf(" Done ");
+    }
+    printf("\n");
+  }
+*/
+//----------------------- End Testing ---------------------- 
+
+  for (j=0; j<n;j++)
+  {
+    for (i=0;i<y;i++)
+    { 
+      h= _mm256_load_ps( &hh [(j*padding*2)+(padding*i)]) ; 
       _mm256_store_ps(output, h);
+     
+      for(int k=0; k<padding; k++)
+        printf("%4.0f ", output[k] );
+
+      printf("\n");
     }
   }
 
+/*
+      for(int k=0; k<n*mm; k++)
+        printf("%3.0f ", hh[k] );
+*/
 
-  return(0) ;
+
+ free(hh);
+ free(f);
+ free(output);
+ return(0) ;
 }
 
+//============ Reversing the array =========
+int inverse(float *arr,int x,int y)
+{
+  int l = 0;
+
+  float *tmp = NULL;      // temp matrix
+  posix_memalign ((void **)&tmp, BYTE_ALIGNMENT, x * y * sizeof(float)); 
+  for (int j=0;j<y;j++)
+    for (int i=0;i<x;i++)	
+    {
+      tmp[l]=arr[(y*i)+j];
+      l++;
+    }
+
+  for (int i=0;i<x*y;i++)
+   {
+    arr[i]=tmp[i];
+   }
+
+  free(tmp);
+  return (0);
+}
