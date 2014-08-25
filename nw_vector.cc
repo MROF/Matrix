@@ -1,8 +1,13 @@
 //  ./nw-avx -a AAAA -b ADERRTTYU -m 0 -s -1 -g -3 -e -1
 
+#include <x86intrin.h>
+#include <emmintrin.h>
+#include <immintrin.h>
+
 #ifdef __AVX
 #include <x86intrin.h>
 #include <emmintrin.h>
+#include <immintrin.h>
 #endif
 #include <unistd.h>
 #include <getopt.h>
@@ -18,6 +23,14 @@
 #endif
 
 int inverse(float arr[],int x,int y); // function to reverse the array
+
+void print(char ch, float *arr)
+{
+  printf("%c  ",ch);
+  for(int k=0; k<8; k++)
+    printf("%4.0f ", arr[k] );
+  printf("\n");
+}
 
 int main(int argc, char * argv[] )
 {
@@ -40,6 +53,7 @@ int main(int argc, char * argv[] )
   char c;
   #if (defined(__AVX))
    __m256 h, t1, x;
+   x= _mm256_setzero_ps();
   #endif
 
   if (argc == 1)
@@ -114,53 +128,41 @@ int main(int argc, char * argv[] )
 
   inverse(hh,mm,n); // inverse the matrix to work with vector approach 
 
-//---------------------------- testing Read of the values -------------
-/*
-  for (j=0; j<n;j++)
-  {
-    for (i=0;i<y;i++)
-    { 
-      for(int k=0;k<padding;k++)
-        printf("%5.0f ",hh[(n*padding*i)+j+(k*4)] );
-
-      printf(" Done ");
-    }
-    printf("\n\n");
-  }
-
-  for (j=0; j<n;j++)
-  {
-    for (i=0;i<y;i++)
-    { 
-      for(int k=0;k<padding;k++)
-        printf("%3d ",(n*padding*i)+j+(k*4) );
-
-      printf(" Done ");
-    }
-    printf("\n");
-  }
-*/
-//----------------------- End Testing ---------------------- 
-
   for (j=0; j<n;j++)
   {
     for (i=0;i<y;i++)
     { 
       h= _mm256_load_ps( &hh [(j*padding*2)+(padding*i)]) ; 
-      _mm256_store_ps(output, h);
-     
-      for(int k=0; k<padding; k++)
-        printf("%4.0f ", output[k] );
+
+
+      _mm256_store_ps(output, h);       //|
+      output[0]=output[7];              //| shiftr7 x0000000
+      for(int k=1;k<padding;k++)        //|    
+        output[k]=0;                    //|
+/**/  print('t', output);               //|
+      t1= _mm256_load_ps(&output [0]) ; //| 
+ 
+      _mm256_store_ps(output, h);       //|
+/**/  print('h', output);               //|
+      for(int k=padding; k>0; k--)      //|shiftl 0xxxxxxx
+        output[k]=output[k-1];          //|
+      output[0]=0;                      //|
+      h= _mm256_load_ps( &output[0]);   //|
+
+      h= _mm256_or_ps(h, x);
+/**/  print('+', output);
+
+      _mm256_store_ps(output, t1);     //copy t1 int x 
+      x= _mm256_load_ps(&output [0]);
+/**/  _mm256_store_ps(output, x);
+      print('x', output);
+   
+
 
       printf("\n");
     }
+    printf("\n");
   }
-
-/*
-      for(int k=0; k<n*mm; k++)
-        printf("%3.0f ", hh[k] );
-*/
-
 
  free(hh);
  free(f);
