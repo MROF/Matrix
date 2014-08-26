@@ -1,4 +1,4 @@
-//  ./nw-avx -a AAAA -b ADERRTTYU -m 0 -s -1 -g -3 -e -1
+//  ./nw-avx -a ABAA -b ADERRTTYU -m 0 -s -1 -g -3 -e -1
 
 #include <x86intrin.h>
 #include <emmintrin.h>
@@ -47,13 +47,12 @@ int main(int argc, char * argv[] )
   int padding=BYTE_ALIGNMENT / 4;   //padding = 8 or 4 
   int qq[padding];      //gapopen and extention vectors
   int rr[padding];
-  int score[padding];
-  int i, j;
+  char c, cc;
 
-  char c;
   #if (defined(__AVX))
-   __m256 h, t1, x;
+   __m256 h, t1, x, score;
    x= _mm256_setzero_ps();
+  score= _mm256_setzero_ps();
   #endif
 
   if (argc == 1)
@@ -81,11 +80,10 @@ int main(int argc, char * argv[] )
   printf ("Match:%4d   Mismatch:%d\n", match, mismatch);
   printf ("Gapopen:%2d   gapextend:%d\n\n", gapopen, gapextend);
 
-  for (i=0; i<padding;i++)   //fill the gap vectors will penalties
+  for (int i=0; i<padding;i++)   //fill the gap vectors will penalties
   {
     qq[i]=gapopen;
     rr[i]=gapextend;
-    score[i]=0;
   }
 
   int n= strlen(a);
@@ -95,30 +93,45 @@ int main(int argc, char * argv[] )
   if (m%padding) // not 4 or 8 greater common divisor    
   {
     mm = m + (padding - (m % padding)); //new size of the array
-    for (j=m; j<mm;j++)
+    for (int j=m; j<mm;j++)
       b[j]='Z';      //padding letters
   }
 
+  float *scorematrix; // matrix filled with match and mismatchi costs
   float *hh;
   float *f;
-  posix_memalign ((void **)&hh, BYTE_ALIGNMENT, n * mm * sizeof(float));
-  posix_memalign ((void **)&f, BYTE_ALIGNMENT,  n * mm * sizeof(float));
+  posix_memalign ((void **) &hh, BYTE_ALIGNMENT, n * mm * sizeof(float));
+  posix_memalign ((void **) &f, BYTE_ALIGNMENT, n * mm * sizeof(float));
+  posix_memalign ((void **) &scorematrix, BYTE_ALIGNMENT,  n * mm * sizeof(float));
 
-  for(i=0;i<n*mm;i++)
+  int l=0;                        // Filling the score matrix
+  for (int j=0; j<n; j++)
+  {
+    c=a[j];
+    for (int i=0; i<mm; i++)
+    {
+      cc= b[i];
+     
+      if (c==cc)
+        scorematrix[l] = match;
+      else
+        scorematrix[l] = mismatch;
+
+      l++;      
+    }
+  }
+
+  for(int i=0;i<n*mm;i++)
     hh[i]=f[i]=-99;
 
   hh[0]=0;
 
-  for(i=1; i<mm; i++)
+  for(int i=1; i<mm; i++)
   {
     hh[n*i]= f[n*i]= gapopen+(i*gapextend);
   
-    for (j=1; j<n;j++)
-    {
-      c=a[j-1];
+    for (int j=1; j<n;j++)
       hh[j]= f[j]= gapopen+(j*gapextend);
-    }
-
   }
 
   int y= mm/padding;
@@ -128,45 +141,50 @@ int main(int argc, char * argv[] )
 
   inverse(hh,mm,n); // inverse the matrix to work with vector approach 
 
-  for (j=0; j<n;j++)
+  for (int j=0; j<n;j++)
   {
-    for (i=0;i<y;i++)
+    c=a[j];
+
+    for (int i=0;i<y;i++)
     { 
       h= _mm256_load_ps( &hh [(j*padding*2)+(padding*i)]) ; 
-
 
       _mm256_store_ps(output, h);       //|
       output[0]=output[7];              //| shiftr7 x0000000
       for(int k=1;k<padding;k++)        //|    
         output[k]=0;                    //|
-/**/  print('t', output);               //|
+      print('t', output);               //|                                   //X
       t1= _mm256_load_ps(&output [0]) ; //| 
  
       _mm256_store_ps(output, h);       //|
-/**/  print('h', output);               //|
+      print('h', output);               //|                                   //x
       for(int k=padding; k>0; k--)      //|shiftl 0xxxxxxx
         output[k]=output[k-1];          //|
       output[0]=0;                      //|
       h= _mm256_load_ps( &output[0]);   //|
 
       h= _mm256_or_ps(h, x);
-/**/  print('+', output);
+      print('+', output);                                                     //x
 
-      _mm256_store_ps(output, t1);     //copy t1 int x 
+      _mm256_store_ps(output, t1);      //copy t1 int x 
       x= _mm256_load_ps(&output [0]);
-/**/  _mm256_store_ps(output, x);
-      print('x', output);
-   
+      _mm256_store_ps(output, x);                                             //x
+      print('x', output);                                                     //x
 
-
+      score= _mm256_load_ps( &scorematrix [(j*padding*2)+(padding*i)]) ; 
+      h= _mm256_add_ps(h, score);
+      
       printf("\n");
+
     }
-    printf("\n");
+    printf("\n_______________\n");
   }
 
  free(hh);
  free(f);
  free(output);
+ free(scorematrix);
+
  return(0) ;
 }
 
