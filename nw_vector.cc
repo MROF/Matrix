@@ -131,23 +131,26 @@ int main(int argc, char * argv[] )
 
     for (int i=0;i<y;i++)
     { 
+//--------------------------------------
       score = _mm256_load_ps(&score_matrix[flag]); //pull the scores 
       flag += padding;
 
       n_vector= _mm256_load_ps( &HH[ i*padding ] );
+      t1= shiftr7( n_vector, padding );
 
       n_vector= shiftl1( n_vector, padding );
 
-//       t1= shiftr7( n_vector, padding );
-       
       h= _mm256_or_ps( h, n_vector );
+
+
       e= _mm256_load_ps( &EE[ i*padding ] );
       h= _mm256_add_ps (h, score);
 
       h= _mm256_min_ps (h, e);
       _mm256_store_ps(HH +(padding*i), h );
-
       print (h, padding);
+
+//      print (t1, padding);
 
       h= _mm256_add_ps (h,qq);   // h= h+(q+r)
       h= _mm256_add_ps (h,rr);  
@@ -155,9 +158,9 @@ int main(int argc, char * argv[] )
       e= _mm256_add_ps (e,rr);   //e= e+r
       e= _mm256_min_ps (h, e);   //e= min(h,e)
       _mm256_store_ps( EE+(padding*i), e );
-
-//       h= _mm256_set_ps(0,0,0,0,0,0,0,0);
-//       h= _mm256_or_ps(h,t1);
+//--------------------------------------
+      h= _mm256_setzero_ps();
+      h= _mm256_or_ps(h,t1);
       printf("\t");
     }
     printf("\n");
