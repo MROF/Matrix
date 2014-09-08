@@ -14,6 +14,7 @@
 void print(__m256 vector, int padding);
 __m256 shiftr7(__m256 vector, int padding);
 __m256 shiftl1(__m256 vector, int padding);
+int check(__m256 vector, int padding);
 
 //================ Main ===================
 //=========================================
@@ -111,6 +112,14 @@ int main(int argc, char * argv[] )
   }
 
 //-----------------------------------------------------------
+//***********************************************************
+  __m256 T2;
+  __m256 f;
+  __m256 h1;
+  __m256 h2;
+  float inf=-99;
+
+//***********************************************************
 
   int y= mm/padding;
   int flag=0; 
@@ -122,8 +131,13 @@ int main(int argc, char * argv[] )
   }
 
 //----------------------------------------------------------
+
   for (int j=0; j<n;j++)
   {
+
+    f= _mm256_set_ps( inf, inf, inf, inf, inf, inf, inf, ( 2*gapopen + (j+2) * gapextend ) );
+    T2= _mm256_set_ps( inf, inf, inf, inf, inf, inf, inf, inf );
+
     if (j==0)
       h= _mm256_setzero_ps();
     else
@@ -142,24 +156,48 @@ int main(int argc, char * argv[] )
 
       h= _mm256_or_ps( h, n_vector );
 
-
       e= _mm256_load_ps( &EE[ i*padding ] );
       h= _mm256_add_ps (h, score);
 
       h= _mm256_min_ps (h, e);
-      _mm256_store_ps(HH +(padding*i), h );
-      print (h, padding);
+//      _mm256_store_ps(HH +(padding*i), h );
+//        print (h, padding);
 
-//      print (t1, padding);
+//*********************************************
 
+      while (check (f, padding) )
+      {
+//        print (f, padding);
+//        printf("\t"); 
+
+//        print (T2, padding);
+//        printf("\t"); 
+
+        f= _mm256_max_ps (T2, f);
+          
+        h2= _mm256_min_ps (h, f);    // #
+        
+        T2=_mm256_add_ps (f, rr);  // f=f+r
+
+        h1= _mm256_add_ps (qq, rr);   // h= h+(q+r)
+        h1= _mm256_add_ps (h1, h2);  
+   
+        T2= _mm256_min_ps (h1,T2);
+        T2= shiftl1( T2, padding );
+//        printf("\n");
+      }
+     
+        print (h2, padding);
+        _mm256_store_ps(HH +(padding*i), h2 );
+//*********************************************
       h= _mm256_add_ps (h,qq);   // h= h+(q+r)
       h= _mm256_add_ps (h,rr);  
 
       e= _mm256_add_ps (e,rr);   //e= e+r
       e= _mm256_min_ps (h, e);   //e= min(h,e)
       _mm256_store_ps( EE+(padding*i), e );
-//--------------------------------------
-      h= _mm256_setzero_ps();
+
+      h= _mm256_setzero_ps();  //saving value for the padding part 
       h= _mm256_or_ps(h,t1);
       printf("\t");
     }
@@ -174,15 +212,25 @@ int main(int argc, char * argv[] )
  return(0) ;
 }
 
-/*
-      _mm256_store_ps(output, t1);      //copy t1 into x 
-      x= _mm256_load_ps(&output [0]);
-      _mm256_store_ps(output, x);                                             //x
-      print('x', output);                                                     //x
-
-*/
-
 //==========================================
+//---------------- check -------------------
+int check(__m256 vector, int padding)
+{
+  float * temp;
+  int flag=0;
+  posix_memalign ((void **) &temp, BYTE_ALIGNMENT, padding * sizeof(float));
+ 
+  _mm256_store_ps( temp, vector );
+
+  for(int k=0; k<padding; k++)
+  {
+    flag= ( (temp[k]<0) ? 1 : 0 );
+    if (flag==1) return 1;
+  }
+
+  return 0;      
+}
+
 //----------- shiftl 0xxxxxxx---------------
 
 __m256 shiftl1(__m256 vector, int padding)
@@ -232,7 +280,7 @@ void print ( __m256 vector, int padding )
   _mm256_store_ps( temp, vector );
 
   for(int k=0; k<padding; k++)
-    printf( "%2.0f ", temp[k] );
+    printf( "%3.0f ", temp[k] );
 
   free( temp );
 }
