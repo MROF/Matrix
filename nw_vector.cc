@@ -40,13 +40,13 @@ int main(int argc, char * argv[] )
 
 //  __m256 x;
   __m256 h;
-  __m256 e;
-  __m256 t1;
+  __m256 E;
+  __m256 T1;
 //    __m256 f;
   __m256 score;
   __m256 qq;    // gap open vector
   __m256 rr;    // gap extention vector
-  __m256 n_vector;
+  __m256 H;
 
   float *score_matrix; // matrix filled with match and mismatchi costs
   float *HH;
@@ -118,7 +118,6 @@ int main(int argc, char * argv[] )
   __m256 f;
   __m256 h1;
   __m256 h2;
-  float inf=-99;
 
 //***********************************************************
 
@@ -136,7 +135,7 @@ int main(int argc, char * argv[] )
   for (int j=0; j<n;j++)
   {
 
-    f= _mm256_set_ps( inf, inf, inf, inf, inf, inf, inf, ( 2*gapopen + (j+2) * gapextend ) );
+    f= _mm256_set_ps( 0, 0, 0, 0, 0, 0, 0, ( 2*gapopen + (j+2) * gapextend ) );
 
     if (j==0)
       h= _mm256_setzero_ps();
@@ -146,21 +145,21 @@ int main(int argc, char * argv[] )
     for (int i=0;i<y;i++)
     { 
 //--------------------------------------
-      T2= _mm256_set_ps( inf, inf, inf, inf, inf, inf, inf, inf );
+      T2= _mm256_set_ps( 0, 0, 0, 0, 0, 0, 0, 0 );
       score = _mm256_load_ps(&score_matrix[flag]); //pull the scores 
       flag += padding;
 
-      n_vector= _mm256_load_ps( &HH[ i*padding ] );
-      t1= shiftr7( n_vector, padding );
+      H= _mm256_load_ps( &HH[ i*padding ] );
+      T1= shiftr7( H, padding );
 
-      n_vector= shiftl1( n_vector, padding );
+      H= shiftl1( H, padding );
 
-      h= _mm256_or_ps( h, n_vector );
+      h= _mm256_or_ps( h, H );
 
-      e= _mm256_load_ps( &EE[ i*padding ] );
+      E= _mm256_load_ps( &EE[ i*padding ] );
       h= _mm256_add_ps (h, score);
 
-      h= _mm256_min_ps (h, e);
+      h= _mm256_min_ps (h, E);
 //      _mm256_store_ps(HH +(padding*i), h );
 //        print (h, padding);
 
@@ -191,12 +190,12 @@ int main(int argc, char * argv[] )
       h= _mm256_add_ps (h,qq);   // h= h+(q+r)
       h= _mm256_add_ps (h,rr);  
 
-      e= _mm256_add_ps (e,rr);   //e= e+r
-      e= _mm256_min_ps (h, e);   //e= min(h,e)
-      _mm256_store_ps( EE+(padding*i), e );
+      E= _mm256_add_ps (E,rr);   //e= e+r
+      E= _mm256_min_ps (h, E);   //e= min(h,e)
+      _mm256_store_ps( EE+(padding*i), E );
 
       h= _mm256_setzero_ps();  //saving value for the padding part 
-      h= _mm256_or_ps(h,t1);
+      h= _mm256_or_ps(h,T1);
 
 //******* the padding f part 
       f= shiftr7( T3, padding );
