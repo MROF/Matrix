@@ -10,11 +10,14 @@
 #include <assert.h>
 #define BYTE_ALIGNMENT 32
 
-//int inverse(float arr[],int x,int y); // function to reverse the array
-void print(__m256 vector, int padding);
-__m256 shiftr7(__m256 vector, int padding);
-__m256 shiftl1(__m256 vector, int padding);
-int check(__m256 vector, int padding);
+void print(__m256 vector);
+__m256 shiftr7(__m256 vector);
+__m256 shiftl1(__m256 vector);
+int check(__m256 vector);
+
+__m256 newshiftl1(__m256 vector);
+
+int padding = BYTE_ALIGNMENT / 4;   //padding = 8 or 4 
 
 //================ Main ===================
 //=========================================
@@ -31,27 +34,23 @@ int main(int argc, char * argv[] )
   float gapextend= 0;
 
   int option=0;
-  int padding=BYTE_ALIGNMENT / 4;   //padding = 8 or 4 
   char c;
   char cc;
   int n;
   int m;
   int mm;
-
-//  __m256 x;
-  __m256 h;
-  __m256 E;
-  __m256 T1;
-//    __m256 f;
-  __m256 score;
-  __m256 qq;    // gap open vector
-  __m256 rr;    // gap extention vector
-  __m256 H;
-
   float *score_matrix; // matrix filled with match and mismatchi costs
   float *HH;
   float *EE;
-  float *output;
+
+  __m256 x;
+  __m256 E;
+  __m256 T1;
+  __m256 score;
+  __m256 qq;    // gap open vector
+  __m256 rr;    // gap extention vector
+  __m256 qr;    // q+r
+  __m256 H;
 
   if (argc == 1)
   {
@@ -80,7 +79,7 @@ int main(int argc, char * argv[] )
 
   qq= _mm256_set1_ps (gapopen);
   rr= _mm256_set1_ps (gapextend);
-
+  qr= _mm256_add_ps(qq, rr);
   n= strlen(a); // database / columns
   m= strlen(b); // query / rows  
   mm=m;
@@ -95,7 +94,6 @@ int main(int argc, char * argv[] )
   posix_memalign ((void **) &HH, BYTE_ALIGNMENT, mm * sizeof(float));
   posix_memalign ((void **) &EE, BYTE_ALIGNMENT, mm * sizeof(float));
   posix_memalign ((void **) &score_matrix, BYTE_ALIGNMENT,  n * mm * sizeof(float));
-  posix_memalign ((void **)&output, BYTE_ALIGNMENT, padding * sizeof(float));
 
 //-----------------------------------------------------------
   int l=0;                        // Filling the score matrix
@@ -111,7 +109,6 @@ int main(int argc, char * argv[] )
     }
   }
 
-//-----------------------------------------------------------
 //***********************************************************
   __m256 T2;
   __m256 T3;
@@ -134,34 +131,29 @@ int main(int argc, char * argv[] )
 
   for (int j=0; j<n;j++)
   {
-
     f= _mm256_set_ps( 0, 0, 0, 0, 0, 0, 0, ( 2*gapopen + (j+2) * gapextend ) );
 
     if (j==0)
-      h= _mm256_setzero_ps();
+      x= _mm256_setzero_ps();
     else
-      h= _mm256_set_ps( 0, 0, 0, 0, 0, 0, 0, (gapopen+ j*gapextend) );
+      x= _mm256_set_ps( 0, 0, 0, 0, 0, 0, 0, (gapopen+ j*gapextend) );
 
     for (int i=0;i<y;i++)
     { 
 //--------------------------------------
-      T2= _mm256_set_ps( 0, 0, 0, 0, 0, 0, 0, 0 );
+      T2= _mm256_setzero_ps(); 
       score = _mm256_load_ps(&score_matrix[flag]); //pull the scores 
       flag += padding;
 
       H= _mm256_load_ps( &HH[ i*padding ] );
-      T1= shiftr7( H, padding );
+      T1= shiftr7( H );
 
-      H= shiftl1( H, padding );
-
-      h= _mm256_or_ps( h, H );
-
+      H= _mm256_or_ps( shiftl1(H), x );
       E= _mm256_load_ps( &EE[ i*padding ] );
-      h= _mm256_add_ps (h, score);
-
-      h= _mm256_min_ps (h, E);
+      H= _mm256_add_ps (H, score);
+      H= _mm256_min_ps (H, E);
 //      _mm256_store_ps(HH +(padding*i), h );
-//        print (h, padding);
+//        print (h);
 
 //*********************************************
 
@@ -169,37 +161,30 @@ int main(int argc, char * argv[] )
       {
  //     while (check (f, padding) )
 
-//        print (T2, padding);
+        h2= _mm256_min_ps (H, f);
 
-        f= _mm256_max_ps (T2, f);
-         
-        h2= _mm256_min_ps (h, f);
-        
         T2=_mm256_add_ps (f, rr);  // f=f+r
 
-        h1= _mm256_add_ps (qq, rr);   // h= h+(q+r)
-        h1= _mm256_add_ps (h1, h2);  
+        h1= _mm256_add_ps (qr, h2);  
    
         T3= _mm256_min_ps (h1,T2);
-        T2= shiftl1( T3, padding );
+
+        f= _mm256_max_ps ( f, shiftl1(T3) );
+
+                              // newshiftl1( T3 );         // it gives shuftr1 so it is  not workking 
       }
-             
-      print (h2, padding);
+       print (h2);
+
       _mm256_store_ps(HH +(padding*i), h2 );
 //*********************************************
-      h= _mm256_add_ps (h,qq);   // h= h+(q+r)
-      h= _mm256_add_ps (h,rr);  
-
+      H= _mm256_add_ps (H,qr);   // h= h+(q+r)
       E= _mm256_add_ps (E,rr);   //e= e+r
-      E= _mm256_min_ps (h, E);   //e= min(h,e)
+      E= _mm256_min_ps (H, E);   //e= min(h,e)
       _mm256_store_ps( EE+(padding*i), E );
 
-      h= _mm256_setzero_ps();  //saving value for the padding part 
-      h= _mm256_or_ps(h,T1);
-
+      x=T1;
 //******* the padding f part 
-      f= shiftr7( T3, padding );
-//      printf("\t");
+      f= shiftr7( T3 );
     }
     printf("\n");
   }
@@ -207,14 +192,13 @@ int main(int argc, char * argv[] )
  free(score_matrix);
  free(HH);
  free(EE);
- free(output);
  
  return(0) ;
 }
 
 //==========================================
 //---------------- check -------------------
-int check(__m256 vector, int padding)
+int check(__m256 vector)
 {
   float * temp;
   int flag=0;
@@ -228,12 +212,13 @@ int check(__m256 vector, int padding)
     if (flag==1) return 1;
   }
 
+  free( temp);
   return 0;      
 }
 
 //----------- shiftl 0xxxxxxx---------------
 
-__m256 shiftl1(__m256 vector, int padding)
+__m256 shiftl1(__m256 vector)
 {
   float * temp;
   posix_memalign ((void **) &temp, BYTE_ALIGNMENT, padding * sizeof(float));
@@ -244,16 +229,15 @@ __m256 shiftl1(__m256 vector, int padding)
     temp[k]=temp[k-1];
 
   temp[0]=0;
-
   vector= _mm256_load_ps( &temp[0]);
-  free( temp);
 
+  free( temp);
   return vector;
 }
 
 //------------ shiftr7 x0000000-------------
 
-__m256 shiftr7(__m256 vector, int padding)
+__m256 shiftr7(__m256 vector)
 {
   float *temp;
   posix_memalign ((void **) &temp, BYTE_ALIGNMENT, padding * sizeof(float));
@@ -265,16 +249,15 @@ __m256 shiftr7(__m256 vector, int padding)
   for(int k=1;k<padding;k++) 
     temp[k]= 0;
   vector= _mm256_load_ps( &temp[0] ); 
-  free (temp);
 
- return vector;
+  free (temp);
+  return vector;
 }
 
 //-----------------------------------------
-void print ( __m256 vector, int padding )
+void print ( __m256 vector)
 {
   float * temp;
-
   posix_memalign ((void **) &temp, BYTE_ALIGNMENT, padding * sizeof(float));
  
   _mm256_store_ps( temp, vector );
@@ -284,3 +267,14 @@ void print ( __m256 vector, int padding )
 
   free( temp );
 }
+
+//--------------------------
+
+__m256 newshiftl1(__m256 vector)
+{
+  __m256 u = _mm256_permute_ps(vector, 0x39);    //shiftr 1
+  __m256 v = _mm256_permute2f128_ps(u, u, 0x81);
+  __m256 ans  = _mm256_blend_ps(u, v, 0x88);
+  return ans;
+}
+
