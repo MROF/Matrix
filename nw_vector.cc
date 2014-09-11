@@ -1,13 +1,10 @@
 //  ./nw-avx -a ATAGAAGTAG -b TCAGTCAGTCAGAGC -m 0 -s 1 -g 1 -e 1
 
-#include <emmintrin.h>
 #include <immintrin.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #define BYTE_ALIGNMENT 32
 
 void print(__m256 vector);
@@ -110,12 +107,9 @@ int main(int argc, char * argv[] )
   }
 
 //***********************************************************
-  __m256 T2;
   __m256 T3;
   __m256 f;
-  __m256 h1;
   __m256 h2;
-
 //***********************************************************
 
   int y= mm/padding;
@@ -141,7 +135,6 @@ int main(int argc, char * argv[] )
     for (int i=0;i<y;i++)
     { 
 //--------------------------------------
-      T2= _mm256_setzero_ps(); 
       score = _mm256_load_ps(&score_matrix[flag]); //pull the scores 
       flag += padding;
 
@@ -150,41 +143,29 @@ int main(int argc, char * argv[] )
 
       H= _mm256_or_ps( shiftl1(H), x );
       E= _mm256_load_ps( &EE[ i*padding ] );
-      H= _mm256_add_ps (H, score);
-      H= _mm256_min_ps (H, E);
-//      _mm256_store_ps(HH +(padding*i), h );
-//        print (h);
+      H= _mm256_min_ps ( _mm256_add_ps (H, score), E);  // min( H+score, E)
+//      _mm256_store_ps(HH +(padding*i), H );
+//        print (H);
 
 //*********************************************
 
-      for (int w=0; w<padding; w++)
+      for (int w=0; w<padding; w++)    // while ( check(f) )
       {
- //     while (check (f, padding) )
-
         h2= _mm256_min_ps (H, f);
 
-        T2=_mm256_add_ps (f, rr);  // f=f+r
+        T3= _mm256_min_ps ( _mm256_add_ps(f, rr), _mm256_add_ps (h2, qr) ); //min(H+q+r, f+r)
 
-        h1= _mm256_add_ps (qr, h2);  
-   
-        T3= _mm256_min_ps (h1,T2);
-
-        f= _mm256_max_ps ( f, shiftl1(T3) );
-
-                              // newshiftl1( T3 );         // it gives shuftr1 so it is  not workking 
+        f= _mm256_max_ps ( f, shiftl1(T3) );   // newshiftl1( T3 );  gives shuftr1  
       }
-       print (h2);
+      print (h2);
 
       _mm256_store_ps(HH +(padding*i), h2 );
 //*********************************************
-      H= _mm256_add_ps (H,qr);   // h= h+(q+r)
-      E= _mm256_add_ps (E,rr);   //e= e+r
-      E= _mm256_min_ps (H, E);   //e= min(h,e)
+      E= _mm256_min_ps ( _mm256_add_ps (H,qr), _mm256_add_ps (E,rr) ); //E=min(H+q+r ,E+r)
       _mm256_store_ps( EE+(padding*i), E );
 
-      x=T1;
-//******* the padding f part 
-      f= shiftr7( T3 );
+      x=T1;               //pading for the H and E part
+      f= shiftr7( T3 );   // padding f part 
     }
     printf("\n");
   }
@@ -217,7 +198,6 @@ int check(__m256 vector)
 }
 
 //----------- shiftl 0xxxxxxx---------------
-
 __m256 shiftl1(__m256 vector)
 {
   float * temp;
@@ -236,7 +216,6 @@ __m256 shiftl1(__m256 vector)
 }
 
 //------------ shiftr7 x0000000-------------
-
 __m256 shiftr7(__m256 vector)
 {
   float *temp;
@@ -269,7 +248,6 @@ void print ( __m256 vector)
 }
 
 //--------------------------
-
 __m256 newshiftl1(__m256 vector)
 {
   __m256 u = _mm256_permute_ps(vector, 0x39);    //shiftr 1
@@ -277,4 +255,3 @@ __m256 newshiftl1(__m256 vector)
   __m256 ans  = _mm256_blend_ps(u, v, 0x88);
   return ans;
 }
-
