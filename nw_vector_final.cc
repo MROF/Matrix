@@ -1,5 +1,5 @@
-//  ./nw-avx -a ATAGAAGTAG -b TCAGTCAGTCAGAGC -m 0 -s 1 -g 1 -e 1
-//  ./nw-avx -a ATAGAAGTAG -b TCAGTCAG -m 0 -s 1 -g 1 -e 1
+// ./nw-avx -a A -b ACGGAGTTACGGAGTT -m 0 -s 1 -g 1 -e 1
+// ./nw-avx -a ATAGAAGTAG -b TCAGTCAGTCAGAGCG -m 0 -s 1 -g 1 -e 1
 
 #include <immintrin.h>
 #include <unistd.h>
@@ -104,8 +104,6 @@ int main(int argc, char * argv[] )
   int y= mm/padding;
   int flag=0; 
 
-//  HH[0]= ((q+8*r), (q+7*r), (q+6*r), (q+5*r), (q+4*r), (q+3*r), (q+2*r), (q+r));
-
   for(int i=0; i<(mm); i++)   //initializing HH and EE 
   {
     HH[i]= q + ( (i+1) * r );
@@ -139,29 +137,29 @@ int main(int argc, char * argv[] )
       H=  _mm256_add_ps (H, score);
       H= _mm256_min_ps ( H, E);  // min( H+score, E)
 
-//      print (H);                                /**/
-//      _mm256_store_ps(HH +(padding*i), H );     /**/ 
+//    print (H);                                /**/    open to print just H,E 
+//    _mm256_store_ps(HH +(padding*i), H );     /**/    open to print just H,E 
 
 //*********************************************
+
       T2= _mm256_add_ps( _mm256_or_ps(shiftl1(H), H0), qr);
-      if ( check( _mm256_sub_ps(H, T2) ))
-      {
+//      if ( check( _mm256_sub_ps(H, T2) ))
+//      {
         F=T2;
         do
-	{
+  	{
 	  F=_mm256_min_ps(F,T2);
           T2= _mm256_add_ps( _mm256_or_ps(shiftl1(F), F0), rr);
 	} while ( check( _mm256_sub_ps(F, T2) ));
 
 	H= _mm256_min_ps(H,F);
-      }
+/*      }
 
       else 
-      F=_mm256_set_ps( 0, 0, 0, 0, 0, 0, 0, (2*q) + (j+1)*r + (i*r) );
-
+        F=_mm256_set_ps( ( 2*q + (j+1)*r ), 0, 0, 0, 0, 0, 0, 0);
+*/
       H0=shiftr7(H);
       F0=shiftr7(F);
-
       print (H);
       _mm256_store_ps( HH +(padding*i), H );
 
