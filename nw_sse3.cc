@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////
-//  Needleman/Wunsch using (16-bit) integer elements			//
+//  Needleman-Wunsch using (16-bit) integer elements			//
 //									//
 //  Example   ./nw-sse3 -a ATAGAAGTAG -b TCAGTCAG -m 0 -s 1 -g 1 -e 1	//
 //  where the variables refer to: 					//
@@ -24,9 +24,6 @@ int padding = BYTE_ALIGNMENT / 2;   //new vecotr size = multiples of padding
 int check2(__m128i vector1, __m128i vector2);
 void print(__m128i vector);
 void convert(char * s);
-__m128i shiftr7(__m128i vector);
-__m128i shiftl1(__m128i vector);
-
 char map_nt[256] =
   {
     // A=0, C=1, G=2, T=3
@@ -67,9 +64,10 @@ int main(int argc, char * argv[] )
   int m;
   int mm;
   int y;
-  int score_matrix[4][4];
-//  int flag;
+  int score_matrix[4][4];    //DNA letters 
+  int flag;
 
+  int16_t *s_matrix; // matrix filled with match and mismatchi costs
   __m128i *HH;
   __m128i *EE;
   __m128i x;
@@ -86,6 +84,7 @@ int main(int argc, char * argv[] )
   __m128i T2;
   __m128i init;
   __m128i padding_mul_r;      // 8*rr
+//  int mycounter=0;
 
   if (argc == 1)
   {
@@ -127,6 +126,7 @@ int main(int argc, char * argv[] )
 
   posix_memalign ((void **) &HH, BYTE_ALIGNMENT, mm * sizeof(__m128i) );
   posix_memalign ((void **) &EE, BYTE_ALIGNMENT, mm * sizeof(__m128i) );
+  posix_memalign ((void **) &s_matrix, BYTE_ALIGNMENT, 4 * m * sizeof(int16_t) );
 
 //---------------- Filling the score matrix ----------------
 
@@ -136,10 +136,21 @@ int main(int argc, char * argv[] )
   for(int i=0; i<4; i++)		
     for(int j=0; j<4; j++)
       score_matrix[i][j] = (i==j) ? match : mismatch;
+
+  int l=0;
+  for (int i=0; i<4; i++)
+  {
+    for (int j=0; j<m; j++)
+    {
+      s_matrix[l] = score_matrix[ i ][ (int)b[j] ];
+      l++;
+    }
+  }
+
 //----------------------------------------------------------
 //@@@@@@@@@@@@@@@@@@@@@@@@@@ start counting the time @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
   gettimeofday(&start_t, NULL);
-for(int counter=0; counter<1; counter++)
+for(int counter=0; counter<10; counter++)
 {
   y= mm/padding;
 //================== initializing HH and EE ==================
@@ -153,13 +164,11 @@ for(int counter=0; counter<1; counter++)
 
   for(int i=1; i<y; i++)
   {
-    init = _mm_load_si128(  &HH[ (i-1) * padding]); 
+    init = _mm_load_si128(  &HH[ (i-1) * padding]);
     init = _mm_add_epi16( init, padding_mul_r );    // HH[i-1] + 8*rr
     _mm_store_si128(  HH + (padding*i), init );
 
-    init = _mm_load_si128(  &EE[ (i-1) * padding]); 
-    init = _mm_add_epi16( init, padding_mul_r );    // EE[i-1] + 8*rr
-    _mm_store_si128( EE + (padding*i), init );
+    _mm_store_si128( EE + (padding*i), _mm_add_epi16( init, qq)  );	// EE= HH+ QQ
   }
 
 //=============================================================
@@ -169,34 +178,17 @@ for(int counter=0; counter<1; counter++)
     H0= _mm_set_epi16( 0, 0, 0, 0, 0, 0, 0,  q+ (j+1)*r  );
     F0= _mm_set_epi16( 0, 0, 0, 0, 0, 0, 0, (2*q) + (j+1)*r );
     F= _mm_setzero_si128();
+    flag=0;
 
-//    flag=0;
     for (int i=0;i<y;i++)
     { 
-/*
-      score = _mm_set_epi16( score_matrix[ int(a[j]) ][ int(b[flag+7]) ], 
- 			     score_matrix[ int(a[j]) ][ int(b[flag+6]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[flag+5]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[flag+4]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[flag+3]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[flag+2]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[flag+1]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[flag+0]) ] );
-      flag += padding;
-*/
-      score = _mm_set_epi16( score_matrix[ int(a[j]) ][ int(b[padding*i +7]) ],
- 			     score_matrix[ int(a[j]) ][ int(b[padding*i +6]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[padding*i +5]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[padding*i +4]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[padding*i +3]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[padding*i +2]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[padding*i +1]) ], 
-			     score_matrix[ int(a[j]) ][ int(b[padding*i +0]) ] );
+      score = _mm_load_si128( (__m128i*)&s_matrix[ flag + (y*padding*a[j]) ]); //pull the scores
 
-      H= _mm_load_si128(  &HH[ i*padding ] );
-      E= _mm_load_si128(  &EE[ i*padding ] );
-      
+      H= _mm_load_si128(  &HH[ flag ] );
+      E= _mm_load_si128(  &EE[ flag ] );
+
       T1= _mm_srli_si128(H,14);   //shiftr7(H)
+
       H= _mm_or_si128( _mm_slli_si128(H,2), x );  //shiftl1(H)
       x= T1;                                      //pading for the H and E part
       H= _mm_add_epi16 (H, score);
@@ -209,8 +201,8 @@ for(int counter=0; counter<1; counter++)
 
       T2= _mm_add_epi16( _mm_or_si128( _mm_slli_si128(H,2), H0), qr);    // the H+qr vector to be compared with F 
 
-      if (check2(H, T2) or check2(H, F) )
-      {
+//      if (check2(H, T2) or check2(H, F) )
+//      {
         F=T2;  
         do
   	{
@@ -219,25 +211,27 @@ for(int counter=0; counter<1; counter++)
 	} while ( check2(F, T2) );
 
         H= _mm_min_epi16(H,F);
-      }
+/*      }
 
       else 
         F=_mm_set_epi16( (2*q) + (j+1)*r, 0, 0, 0, 0, 0, 0, 0);  
-    
+*/    
       H0=_mm_srli_si128(H,14);   //shiftr7(H)
       F0=_mm_srli_si128(F,14);   //shiftr7(F)
 
-      print (H);
+//      print (H);
 
-      _mm_store_si128( HH +(padding*i), H );
+      _mm_store_si128( HH +(flag), H );
       E= _mm_min_epi16 ( _mm_add_epi16 (H,qr), _mm_add_epi16 (E,rr) ); //E=min(H+q+r ,E+r)
-      _mm_store_si128( EE+(padding*i), E );
+      _mm_store_si128( EE+(flag), E );
+      flag += padding;
     }
-    printf("\n");
+//    printf("\n");
   }
+
 }
   gettimeofday(&end_t, NULL);
-  printf("Total time taken by CPU: %ld \n", ((end_t.tv_sec - start_t.tv_sec)* 1000000 + end_t.tv_usec - start_t.tv_usec));
+  printf("Total time taken by CPU: %ld \n", ( (end_t.tv_sec - start_t.tv_sec)*1000000 + end_t.tv_usec - start_t.tv_usec) /10);
 
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
