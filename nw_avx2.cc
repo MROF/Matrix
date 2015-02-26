@@ -49,7 +49,7 @@ char map_nt[256] =
 
 int main(int argc, char * argv[] )
 {
-  printf("\n====================================================================\n");
+  printf("====================================================================\n");
   struct timeval start_t, end_t;
 
   char *a;
@@ -63,9 +63,11 @@ int main(int argc, char * argv[] )
   int m;
   int mm;
   int y;
-//  int flag;
   int score_matrix[4][4];
+  int flag;
+  int padding_times;
 
+  int16_t *s_matrix; // matrix filled with match and mismatchi costs
   __m256i *HH;   
   __m256i *EE;
   __m256i x;
@@ -105,26 +107,24 @@ int main(int argc, char * argv[] )
     }
   }
 
-  printf ("Match:%4d   Mismatch:%d\n", match, mismatch);
-  printf ("Gapopen:%2d  gapextend:%2d\n\n", q, r);
+//  printf ("Match:%4d   Mismatch:%d\n", match, mismatch);
+//  printf ("Gapopen:%2d  gapextend:%2d\n\n", q, r);
 
   qq= _mm256_set1_epi16 (q);
-  print(qq);
-  exit(0);
-
   rr= _mm256_set1_epi16 (r);
   qr= _mm256_add_epi16(qq, rr);
-  padding_mul_r= _mm256_mullo_epi16( _mm256_set1_epi16(8), rr);
+
+  padding_mul_r= _mm256_mullo_epi16( _mm256_set1_epi16(padding), rr);
  
   n= strlen(a);
   m= strlen(b);  
-  mm=m;
 
-  mm = ((m - 1) | (BYTE_ALIGNMENT - 1)) + 1;
-//  mm = ((m - 1) | ( padding - 1)) + 1;       //the new zize of the vector
+//  mm = ((m - 1) | (BYTE_ALIGNMENT - 1)) + 1;
+  mm = ((m - 1) | ( padding - 1)) + 1;       //the new zize of the vector
 
   posix_memalign ( (void **) &HH, BYTE_ALIGNMENT, mm * sizeof(__m256i) );
   posix_memalign ( (void **) &EE, BYTE_ALIGNMENT, mm * sizeof(__m256i) );
+  posix_memalign ((void **) &s_matrix, BYTE_ALIGNMENT, 4 *mm * sizeof(int16_t) );
 
 //---------------- Filling the score matrix ----------------
 
@@ -135,11 +135,21 @@ int main(int argc, char * argv[] )
     for(int j=0; j<4; j++)
       score_matrix[i][j] = (i==j) ? match : mismatch;
 
+  int l=0;
+  for (int i=0; i<4; i++)
+  {
+    for (int j=0; j<m; j++)
+    {
+      s_matrix[l] = score_matrix[ i ][ (int)b[j] ];
+      l++;
+    }
+  }
+
 //----------------------------------------------------------
 
 //@@@@@@@@@@@@@@@@@@@@@@@@@@ start counting the time @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
   gettimeofday(&start_t, NULL);
-for(int counter=0; counter<1; counter++)
+for(int counter=0; counter<20; counter++)
 {
   y= mm/padding;
 //================== initializing HH and EE ==================
@@ -150,130 +160,106 @@ for(int counter=0; counter<1; counter++)
   _mm256_store_si256( HH, init );
   _mm256_store_si256( EE, _mm256_add_epi16( init, qq) );     // EE= HH+ QQ
 
+  padding_times=padding;  //(i*padding)
   for(int i=1; i<y; i++)
   {
-    init = _mm256_load_si256( &HH[ (i-1) * padding]); 
+    init = _mm256_load_si256( &HH[ padding_times - padding]); 
     init = _mm256_add_epi16( init, padding_mul_r );    // HH[i-1] + 8*rr
-    _mm256_store_si256( HH + (padding*i), init );
+    _mm256_store_si256( HH + (padding_times), init );
+    _mm256_store_si256( EE + (padding_times), _mm256_add_epi16( init, qq ) );  // EE= HH+ QQ
 
-    init = _mm256_load_si256( &EE[ (i-1) * padding]);
-    init = _mm256_add_epi16( init, padding_mul_r );    // EE[i-1] + 8*rr
-    _mm256_store_si256( EE + (padding*i), init );
+    padding_times += padding;
   }
-
 //=============================================================
-
   for (int j=0; j<n;j++)
   {  
+    int addmul= q+ (j+1)*r;
     x= ( (j==0) ? _mm256_setzero_si256() : _mm256_set_epi16( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (q+ j*r) ) );
-    H0= _mm256_set_epi16( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  q+ (j+1)*r  );
-    F0= _mm256_set_epi16( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (2*q) + (j+1)*r );
+    H0= _mm256_set_epi16( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  addmul  );
+    F0= _mm256_set_epi16( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, q+addmul );
     F=  _mm256_setzero_si256();
-
-//    flag=0;
+    int index=mm*a[j];
+    flag=0;
+   
     for (int i=0;i<y;i++)
     { 
-/*
-      score = _mm256_set_epi16( score_matrix[ int(a[j]) ][ int(b[flag+15]) ], 
- 			        score_matrix[ int(a[j]) ][ int(b[flag+14]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+13]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+12]) ], 
-  			        score_matrix[ int(a[j]) ][ int(b[flag+11]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+10]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+9]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+8]) ], 
-				score_matrix[ int(a[j]) ][ int(b[flag+7]) ], 
- 			        score_matrix[ int(a[j]) ][ int(b[flag+6]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+5]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+4]) ], 
-  			        score_matrix[ int(a[j]) ][ int(b[flag+3]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+2]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+1]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[flag+0]) ] );
-      flag += padding;
-*/
-      score = _mm256_set_epi16( score_matrix[ int(a[j]) ][ int(b[padding*i +15]) ],
- 			        score_matrix[ int(a[j]) ][ int(b[padding*i +14]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +13]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +12]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +11]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +10]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +9]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +8]) ], 
-				score_matrix[ int(a[j]) ][ int(b[padding*i +7]) ],
- 			        score_matrix[ int(a[j]) ][ int(b[padding*i +6]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +5]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +4]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +3]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +2]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +1]) ], 
-			        score_matrix[ int(a[j]) ][ int(b[padding*i +0]) ] );
+      score = _mm256_load_si256( (__m256i*)&s_matrix[ flag+index ]); //pull the scores
+      H= _mm256_load_si256( &HH[ flag ] );
+      E= _mm256_load_si256( &EE[ flag ] );
 
-      H= _mm256_load_si256( &HH[ i*padding ] );
-      E= _mm256_load_si256( &EE[ i*padding ] );
+      T1= _mm256_alignr_epi8(_mm256_permute2x128_si256(H, H, _MM_SHUFFLE(2, 0, 0, 1)), H, 30);   //shiftr7(H)
 
-      T1=_mm256_srli_si256(H,30);     //shiftr7(H)
+      H= _mm256_alignr_epi8(H, _mm256_permute2x128_si256(H, H, _MM_SHUFFLE(0, 0, 2, 0)), 16 - 2);   //shiftl1(H);
+      H= _mm256_or_si256( H, x );	
 
-      H= _mm256_or_si256( _mm256_slli_si256(H,2), x );	//shiftl1(H)
       x= T1;                                     // pading for the H and E part
       H= _mm256_add_epi16 (H, score);
       H= _mm256_min_epi16 ( H, E);                  // min( H+score, E)
                     
 //     print (H);                                   // open to print just H,E 
-//    _mm256_store_si256( HH +(padding*i), H );     // open to print just H,E 
+//    _mm256_store_si256( HH +(flag), H );     // open to print just H,E 
 
 //*********************************************
 
-      T2= _mm256_add_epi16( _mm256_or_si256( _mm256_slli_si256(H,2), H0), qr);    // the H+qr vector to be compared with F 
-      if (check2(H, T2) or check2(H, F) )
-      {
+      T2= _mm256_alignr_epi8(H, _mm256_permute2x128_si256(H, H, _MM_SHUFFLE(0, 0, 2, 0)), 16 - 2);
+      T2= _mm256_add_epi16( _mm256_or_si256( T2, H0), qr);    // the H+qr vector to be compared with F 
+
+//      if (check2(H, T2) or check2(H, F) )
+//      {
         F=T2;  
         do
   	{
 	  F=_mm256_min_epi16(F,T2);
-          T2= _mm256_add_epi16( _mm256_or_si256( _mm256_slli_si256(F,2), F0), rr);
+          T2= _mm256_alignr_epi8(F, _mm256_permute2x128_si256(F, F, _MM_SHUFFLE(0, 0, 2, 0)), 16 - 2);   //shiftl1(F);
+          T2= _mm256_add_epi16( _mm256_or_si256( T2, F0), rr);
+
 	} while ( check2(F, T2) );
 
         H= _mm256_min_epi16(H,F);
-      }
+/*      }
 
       else 
       {
-        F= _mm256_set_epi16( (2*q) + (j+1)*r, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        F= _mm256_set_epi16( q + addmul, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
       }
+*/
+      H0= _mm256_alignr_epi8(_mm256_permute2x128_si256(H, H, _MM_SHUFFLE(2, 0, 0, 1)), H, 30);   //shiftr7(H)
+      F0= _mm256_alignr_epi8(_mm256_permute2x128_si256(F, F, _MM_SHUFFLE(2, 0, 0, 1)), F, 30);   //shiftr7(H)
 
-      H0=_mm256_srli_si256(H,30);   //shiftr7(H)
-      F0=_mm256_srli_si256(F,30);   //shiftr7(F)
+//      print (H);
 
-      print (H);
-
-      _mm256_store_si256( HH +(padding*i), H );
+      _mm256_store_si256( HH +(flag), H );
       E= _mm256_min_epi16 ( _mm256_add_epi16 (H,qr), _mm256_add_epi16 (E,rr) ); //E=min(H+q+r ,E+r)
-      _mm256_store_si256( EE+(padding*i), E );
+      _mm256_store_si256( EE+(flag), E );
+      flag += padding;
     }
-    printf("\n");
+//    printf("\n");
   }
 }
-  gettimeofday(&end_t, NULL);
-  printf("Total time taken by CPU: %ld \n", ((end_t.tv_sec - start_t.tv_sec)* 1000000 + end_t.tv_usec - start_t.tv_usec));
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+  gettimeofday(&end_t, NULL);
+  printf("Total time taken by CPU: %ld \n", ( (end_t.tv_sec - start_t.tv_sec)*1000000 + end_t.tv_usec - start_t.tv_usec) /20);
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
   free(HH);
   free(EE);
+  free(s_matrix);
   return(0) ;
 }
+
 //==========================================
 //---------------- check2 -------------------
 int check2(__m256i vector1, __m256i vector2)
 {
+
   __m256i vcmp = _mm256_cmpgt_epi16(vector1, vector2);
   int cmp = _mm256_movemask_epi8(vcmp);
-  return ((cmp>0) ? 1 : 0) ;
+  return cmp !=0;
 }
-//--------------- ------------------
+
+//--------------- print ------------------
 void print (__m256i vector)
 {
-  int32_t *val = (int32_t*) &vector;
+  int16_t *val = (int16_t*) &vector;
   printf("%2i %2i %2i %2i %2i %2i %2i %2i %2i %2i %2i %2i %2i %2i %2i %2i ", val[0], val[1], val[2], val[3], val[4], val[5], val[6], val[7],
   val[8], val[9], val[10], val[11], val[12], val[13], val[14], val[15]);
 }
